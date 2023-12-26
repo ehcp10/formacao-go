@@ -26,20 +26,28 @@ func saveClient(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
+
 	db[c.Id] = c
 	w.WriteHeader(http.StatusCreated)
 }
 
 func readClient(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
-	id := r.URL.Query().Get("id")
-	if id != "" {
+	vars := mux.Vars(r)
+	id, ok := vars["id"]
+	if ok {
 		index, err := strconv.Atoi(id)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-		c := db[index]
+		c, exists := db[index]
+
+		if !exists {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+
 		if err := json.NewEncoder(w).Encode(&c); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
@@ -57,8 +65,9 @@ func readClient(w http.ResponseWriter, r *http.Request) {
 
 func editClient(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
-	id := r.URL.Query().Get("id")
-	if id != "" {
+	vars := mux.Vars(r)
+	id, ok := vars["id"]
+	if ok {
 		index, err := strconv.Atoi(id)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
@@ -70,9 +79,8 @@ func editClient(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		edit := db[index]
-		edit.Name = c.Name
-		db[index] = edit
+		c.Id = index
+		db[index] = c
 		if err := json.NewEncoder(w).Encode(&c); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
@@ -84,11 +92,17 @@ func editClient(w http.ResponseWriter, r *http.Request) {
 
 func deleteClient(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
-	id := r.URL.Query().Get("id")
-	if id != "" {
+	vars := mux.Vars(r)
+	id, ok := vars["id"]
+	if ok {
 		index, err := strconv.Atoi(id)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		_, exists := db[index]
+		if !exists {
+			w.WriteHeader(http.StatusNotFound)
 			return
 		}
 		delete(db, index)
@@ -102,9 +116,10 @@ func main() {
 	r := mux.NewRouter()
 
 	r.HandleFunc("/client", readClient).Methods("GET")
+	r.HandleFunc("/client/{id}", readClient).Methods("GET")
 	r.HandleFunc("/client", saveClient).Methods("POST")
-	r.HandleFunc("/client", editClient).Methods("PUT")
-	r.HandleFunc("/client", deleteClient).Methods("DELETE")
+	r.HandleFunc("/client/{id}", editClient).Methods("PUT")
+	r.HandleFunc("/client/{id}", deleteClient).Methods("DELETE")
 
 	http.Handle("/", r)
 
